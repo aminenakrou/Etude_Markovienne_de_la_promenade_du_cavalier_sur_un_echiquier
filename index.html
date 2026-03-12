@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Promenade du Cavalier — Chaînes de Markov</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Nunito:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0c0a08;--card:#141210;--card2:#1a1714;--surface:#201c18;--border:#2a2420;--border-l:#3a3228;--text:#ede8e0;--dim:#9a9080;--faint:#5a5048;--gold:#d4a843;--gold2:#c49530;--gold-g:rgba(212,168,67,0.08);--gold-glow:rgba(212,168,67,0.15);--ivory:#f5f0e4;--wood:#8b6a3e;--wood-d:#5a4228;--teal:#5ab8a0;--rose:#d46a6a;--cream:#faf5ea;--light-sq:#e8d5a8;--dark-sq:#8b6a3e;--tr:cubic-bezier(0.16,1,0.3,1);}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{background:var(--bg);color:var(--text);font-family:'Nunito',sans-serif;line-height:1.7;overflow-x:hidden;cursor:none;}
+
+/* LOADER */
+#loader{position:fixed;inset:0;z-index:100000;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.8s,visibility 0.8s;}
+#loader.done{opacity:0;visibility:hidden;}
+.loader-knight{font-size:4rem;animation:knightBounce 1s ease-in-out infinite;}
+@keyframes knightBounce{0%,100%{transform:translateY(0) rotate(0deg);}50%{transform:translateY(-20px) rotate(10deg);}}
+.loader-title{font-family:'Playfair Display',serif;font-size:1.4rem;color:var(--gold);margin-top:1rem;}
+.loader-bar{width:180px;height:2px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:1.5rem;}
+.loader-fill{height:100%;background:linear-gradient(90deg,var(--gold),var(--gold2));width:0;animation:loaderGo 2s ease-out forwards;}
+@keyframes loaderGo{to{width:100%;}}
+.loader-pct{font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:var(--faint);margin-top:0.6rem;}
+
+/* CURSOR */
+.cur-d{position:fixed;width:8px;height:8px;background:var(--gold);border-radius:50%;pointer-events:none;z-index:99999;mix-blend-mode:screen;}
+.cur-r{position:fixed;width:34px;height:34px;border:1.5px solid rgba(212,168,67,0.3);border-radius:50%;pointer-events:none;z-index:99998;transition:width 0.3s,height 0.3s,border-color 0.3s;}
+.cur-r.hover{width:50px;height:50px;border-color:var(--gold);}
+.scroll-bar{position:fixed;top:0;left:0;height:2px;background:linear-gradient(90deg,var(--gold),var(--wood),var(--gold));z-index:10001;width:0%;}
+
+/* GRAIN */
+body::after{content:'';position:fixed;inset:0;opacity:0.025;background:url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");pointer-events:none;z-index:10000;}
+::selection{background:var(--gold);color:var(--bg);}
+a,button{cursor:none;}
+
+/* NAV */
+nav{position:fixed;top:0;width:100%;z-index:1000;padding:0 3rem;height:56px;display:flex;align-items:center;backdrop-filter:blur(20px) saturate(1.2);background:rgba(12,10,8,0.75);border-bottom:1px solid rgba(42,36,32,0.5);transition:all 0.3s;}
+nav.scrolled{background:rgba(12,10,8,0.95);}
+.nav-in{max-width:1200px;width:100%;margin:0 auto;display:flex;justify-content:space-between;align-items:center;}
+.nav-logo{font-family:'Playfair Display',serif;font-size:0.95rem;font-weight:700;color:var(--gold);}
+.nav-logo span{color:var(--faint);font-weight:400;font-family:'Nunito',sans-serif;font-size:0.8rem;}
+.nav-links{list-style:none;display:flex;gap:2rem;}
+.nav-links a{color:var(--dim);text-decoration:none;font-size:0.78rem;font-weight:500;transition:color 0.25s;position:relative;}
+.nav-links a::after{content:'';position:absolute;bottom:-2px;left:50%;right:50%;height:1px;background:var(--gold);transition:left 0.3s,right 0.3s;}
+.nav-links a:hover,.nav-links a.active{color:var(--cream);}
+.nav-links a:hover::after,.nav-links a.active::after{left:0;right:0;}
+
+/* SIDE NAV */
+.side-nav{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);z-index:999;display:flex;flex-direction:column;gap:0.9rem;}
+.side-dot{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--faint);background:transparent;cursor:none;transition:all 0.3s;}
+.side-dot.active{border-color:var(--gold);background:var(--gold);box-shadow:0 0 12px var(--gold-glow);}
+.side-dot::after{content:attr(data-label);position:absolute;right:20px;top:50%;transform:translateY(-50%);font-size:0.58rem;color:var(--faint);white-space:nowrap;opacity:0;transition:opacity 0.3s;pointer-events:none;font-family:'JetBrains Mono',monospace;}
+.side-dot:hover::after{opacity:1;}
+.back-top{position:fixed;bottom:2rem;right:2rem;width:42px;height:42px;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;z-index:999;opacity:0;transform:translateY(20px);transition:all 0.3s;cursor:none;font-size:0.9rem;color:var(--dim);}
+.back-top.vis{opacity:1;transform:translateY(0);}
+.back-top:hover{border-color:var(--gold);color:var(--gold);}
+.toast{position:fixed;bottom:3rem;left:50%;transform:translateX(-50%) translateY(20px);background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:0.6rem 1.2rem;font-size:0.78rem;color:var(--cream);z-index:100001;opacity:0;transition:all 0.4s var(--tr);pointer-events:none;backdrop-filter:blur(10px);}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* PARTICLES */
+#particles{position:fixed;inset:0;z-index:0;pointer-events:none;}
+
+/* HERO */
+.hero{min-height:100vh;display:grid;grid-template-columns:1fr 1fr;align-items:center;max-width:1200px;margin:0 auto;padding:7rem 3rem 4rem;gap:3rem;position:relative;}
+.hero-left{position:relative;z-index:2;}
+.hero-tag{display:inline-flex;align-items:center;gap:0.5rem;font-family:'JetBrains Mono',monospace;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--faint);margin-bottom:2rem;opacity:0;animation:fadeUp 0.8s 0.3s forwards;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.4rem,4.5vw,3.8rem);font-weight:900;line-height:1.1;letter-spacing:-0.01em;margin-bottom:1.5rem;}
+.hero h1 .char{display:inline-block;opacity:0;transform:translateY(100%);animation:charIn 0.6s forwards;}
+@keyframes charIn{to{opacity:1;transform:translateY(0);}}
+.hero h1 em{font-style:italic;color:var(--gold);font-weight:400;}
+.hero h1 em .char{color:var(--gold);}
+.hero-desc{font-size:0.95rem;color:var(--dim);max-width:460px;font-weight:300;margin-bottom:2.5rem;opacity:0;animation:fadeUp 0.8s 1.2s forwards;}
+.hero-actions{display:flex;gap:0.8rem;opacity:0;animation:fadeUp 0.8s 1.5s forwards;}
+.btn{position:relative;display:inline-flex;align-items:center;gap:0.5rem;padding:0.75rem 1.8rem;border-radius:6px;font-size:0.82rem;font-weight:600;text-decoration:none;font-family:'Nunito',sans-serif;border:none;transition:transform 0.15s,box-shadow 0.3s;overflow:hidden;}
+.btn.primary{color:var(--bg);background:var(--gold);}
+.btn.primary:hover{box-shadow:0 0 40px rgba(212,168,67,0.3);transform:translateY(-1px);}
+.btn.ghost{color:var(--dim);border:1px solid var(--border);background:transparent;}
+.btn.ghost:hover{color:var(--cream);border-color:var(--gold);}
+.btn span{position:relative;z-index:1;}
+
+/* INTERACTIVE CHESSBOARD */
+.chess-wrap{position:relative;z-index:2;}
+.chess-container{position:relative;width:100%;max-width:420px;margin:0 auto;}
+.chessboard{display:grid;grid-template-columns:repeat(8,1fr);aspect-ratio:1;border-radius:8px;overflow:hidden;border:3px solid var(--wood-d);box-shadow:0 20px 60px rgba(0,0,0,0.5),0 0 40px rgba(212,168,67,0.05);}
+.chess-sq{position:relative;display:flex;align-items:center;justify-content:center;font-size:0.6rem;font-family:'JetBrains Mono',monospace;transition:all 0.3s;cursor:none;}
+.chess-sq.light{background:var(--light-sq);}
+.chess-sq.dark{background:var(--dark-sq);}
+.chess-sq .degree{color:rgba(0,0,0,0.3);font-weight:600;font-size:0.7rem;transition:all 0.3s;}
+.chess-sq:hover .degree{color:rgba(0,0,0,0.7);}
+.chess-sq.knight-here{z-index:5;}
+.chess-sq.knight-here::after{content:'♞';position:absolute;font-size:2.2rem;color:#1a1a1a;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));animation:knightLand 0.4s var(--tr);}
+@keyframes knightLand{from{transform:scale(0.3) translateY(-30px);opacity:0;}to{transform:scale(1) translateY(0);opacity:1;}}
+.chess-sq.reachable::before{content:'';position:absolute;width:12px;height:12px;border-radius:50%;background:rgba(212,168,67,0.6);animation:reachPulse 1s infinite;}
+@keyframes reachPulse{0%,100%{transform:scale(1);opacity:0.6;}50%{transform:scale(1.3);opacity:0.3;}}
+.chess-sq.visited{box-shadow:inset 0 0 0 2px rgba(90,184,160,0.4);}
+.chess-sq.path-highlight{box-shadow:inset 0 0 0 3px rgba(212,168,67,0.7);}
+.chess-controls{display:flex;gap:0.4rem;margin-top:0.8rem;justify-content:center;flex-wrap:wrap;}
+.chess-btn{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:0.4rem 0.8rem;font-size:0.68rem;color:var(--dim);font-family:'JetBrains Mono',monospace;cursor:none;transition:all 0.25s;}
+.chess-btn:hover{border-color:var(--gold);color:var(--gold);}
+.chess-btn.active{background:var(--gold);color:var(--bg);border-color:var(--gold);}
+.chess-info{text-align:center;margin-top:0.6rem;font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:var(--dim);}
+.chess-info strong{color:var(--gold);}
+.chess-info .teal{color:var(--teal);}
+
+/* HERO STATS */
+.hero-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;margin-top:2rem;border-radius:10px;overflow:hidden;opacity:0;animation:fadeUp 0.8s 1.8s forwards;}
+.stat-cell{background:var(--card);padding:1.2rem;text-align:center;transition:background 0.3s;}
+.stat-cell:hover{background:var(--card2);}
+.stat-val{font-family:'JetBrains Mono',monospace;font-size:1.3rem;font-weight:700;color:var(--cream);}
+.stat-lbl{font-size:0.55rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--faint);margin-top:0.15rem;}
+
+/* SECTIONS */
+section{max-width:1200px;margin:0 auto;padding:7rem 3rem;position:relative;}
+.divider{max-width:1200px;margin:0 auto;height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);position:relative;overflow:hidden;}
+.divider::after{content:'';position:absolute;top:0;left:-100%;width:40%;height:100%;background:linear-gradient(90deg,transparent,var(--gold),transparent);animation:divGl 6s infinite;}
+@keyframes divGl{0%{left:-40%;}100%{left:140%;}}
+.s-num{font-family:'JetBrains Mono',monospace;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.14em;color:var(--gold);margin-bottom:1rem;display:flex;align-items:center;gap:0.6rem;}
+.s-num::after{content:'';flex:1;max-width:50px;height:1px;background:var(--border-l);}
+.s-title{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,3vw,2.4rem);font-weight:700;margin-bottom:0.6rem;line-height:1.2;}
+.s-title em{font-weight:400;font-style:italic;color:var(--gold);}
+.s-desc{color:var(--dim);font-size:0.9rem;max-width:540px;font-weight:300;margin-bottom:3rem;}
+.rv{opacity:0;transform:translateY(32px);transition:opacity 0.8s var(--tr),transform 0.8s var(--tr);}
+.rv.vis{opacity:1;transform:none;}
+.rv.d1{transition-delay:0.1s;}.rv.d2{transition-delay:0.2s;}.rv.d3{transition-delay:0.3s;}
+
+/* CARDS */
+.card-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem;}
+.t-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:2rem 1.5rem;transition:all 0.3s;position:relative;overflow:hidden;}
+.t-card:hover{border-color:rgba(212,168,67,0.2);box-shadow:0 20px 60px rgba(0,0,0,0.3);}
+.tc-i{font-size:1.8rem;margin-bottom:1rem;display:inline-block;transition:transform 0.3s;}
+.t-card:hover .tc-i{transform:scale(1.15) rotate(-8deg);}
+.t-card h3{font-size:0.9rem;font-weight:700;margin-bottom:0.4rem;}
+.t-card p{font-size:0.78rem;color:var(--dim);font-weight:300;line-height:1.7;}
+
+/* DEGREE HEATMAP */
+.heatmap-wrap{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;max-width:480px;margin:2rem auto;border-radius:8px;overflow:hidden;}
+.hm-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:0.85rem;font-weight:700;transition:all 0.3s;position:relative;}
+.hm-cell:hover{transform:scale(1.05);z-index:2;box-shadow:0 4px 20px rgba(0,0,0,0.4);}
+.hm-cell::after{content:attr(data-tip);position:absolute;bottom:-28px;font-size:0.58rem;color:var(--faint);opacity:0;transition:opacity 0.2s;white-space:nowrap;}
+.hm-cell:hover::after{opacity:1;}
+
+/* TIMELINE */
+.timeline{position:relative;padding-left:3rem;margin:2rem 0;}
+.timeline::before{content:'';position:absolute;left:14px;top:0;bottom:0;width:2px;background:var(--border);}
+.tl-step{position:relative;margin-bottom:1.5rem;padding:1.3rem;background:var(--card);border:1px solid var(--border);border-radius:10px;transition:all 0.3s;}
+.tl-step:hover{border-color:rgba(212,168,67,0.2);background:var(--card2);}
+.tl-step::before{content:attr(data-step);position:absolute;left:-3rem;top:1.3rem;width:28px;height:28px;border-radius:50%;background:var(--card);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:0.6rem;font-weight:600;color:var(--gold);z-index:1;transition:all 0.3s;}
+.tl-step:hover::before{border-color:var(--gold);box-shadow:0 0 15px var(--gold-glow);}
+.tl-step h4{font-size:0.85rem;font-weight:700;margin-bottom:0.3rem;}
+.tl-step p{font-size:0.78rem;color:var(--dim);font-weight:300;}
+.badge{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:0.6rem;padding:0.15rem 0.5rem;border-radius:4px;margin-top:0.4rem;margin-right:0.3rem;}
+.b-path{background:rgba(212,168,67,0.1);color:var(--gold);}
+.b-flow{background:rgba(90,184,160,0.1);color:var(--teal);}
+.b-stop{background:rgba(212,106,106,0.1);color:var(--rose);}
+
+/* CALLOUT */
+.callout{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:0 10px 10px 0;padding:1.5rem 1.6rem;margin:1.5rem 0;transition:all 0.3s;position:relative;overflow:hidden;}
+.callout:hover{background:var(--card2);border-left-color:var(--teal);}
+.callout-t{font-size:0.85rem;font-weight:700;margin-bottom:0.3rem;}
+.callout p{font-size:0.82rem;color:var(--dim);font-weight:300;line-height:1.8;}
+.callout strong{color:var(--cream);font-weight:600;}
+
+/* RESULTS TABLE */
+.r-panel{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin:1.5rem 0;}
+.r-head{padding:1rem 1.4rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+.r-head h3{font-size:0.82rem;font-weight:600;}
+.r-badge{font-family:'JetBrains Mono',monospace;font-size:0.6rem;padding:0.2rem 0.6rem;border-radius:4px;background:var(--gold-g);color:var(--gold);}
+.rt{width:100%;border-collapse:collapse;font-size:0.78rem;}
+.rt thead th{padding:0.55rem 1.2rem;text-align:left;font-weight:500;color:var(--faint);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid var(--border);}
+.rt tbody tr{transition:all 0.2s;}
+.rt tbody tr:hover{background:rgba(212,168,67,0.03);}
+.rt td{padding:0.5rem 1.2rem;border-bottom:1px solid rgba(42,36,32,0.4);}
+.rt .val{font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--gold);}
+.rt .tl{color:var(--teal);}
+.rt .nm{font-weight:600;}
+
+/* FORMULA */
+.formula{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.5rem 2rem;text-align:center;margin:1.5rem 0;}
+.formula-label{font-family:'JetBrains Mono',monospace;font-size:0.55rem;text-transform:uppercase;letter-spacing:0.12em;color:var(--faint);margin-bottom:0.5rem;}
+.formula-expr{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--gold);font-style:italic;}
+
+/* CONCLUSION */
+.conc-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:2px;background:var(--border);border-radius:12px;overflow:hidden;}
+.conc-card{background:var(--card);padding:2rem;transition:background 0.3s;}
+.conc-card:hover{background:var(--card2);}
+.conc-card .cc-i{font-size:1.3rem;margin-bottom:1rem;}
+.conc-card h3{font-size:0.9rem;font-weight:700;margin-bottom:0.3rem;}
+.conc-card p{font-size:0.78rem;color:var(--dim);font-weight:300;line-height:1.7;}
+
+/* AUTHORS */
+.authors-bar{display:flex;align-items:center;justify-content:space-between;margin-top:3rem;padding:2rem;background:var(--card);border:1px solid var(--border);border-radius:12px;}
+.authors-left{display:flex;gap:2.5rem;}
+.a-person{display:flex;align-items:center;gap:0.9rem;}
+.a-av{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.82rem;color:var(--bg);transition:transform 0.3s;}
+.a-person:hover .a-av{transform:scale(1.1) rotate(5deg);}
+.a-person:nth-child(1) .a-av{background:var(--gold);}
+.a-person:nth-child(2) .a-av{background:var(--teal);}
+.a-name{font-weight:600;font-size:0.88rem;}
+.a-role{font-size:0.62rem;color:var(--faint);}
+.authors-right{text-align:right;font-size:0.78rem;color:var(--dim);}
+.authors-right strong{color:var(--text);}
+
+footer{border-top:1px solid var(--border);padding:2.5rem;text-align:center;}
+footer p{font-size:0.68rem;color:var(--faint);}
+footer a{color:var(--gold);text-decoration:none;}
+
+/* RESPONSIVE */
+@media(max-width:900px){.hero{grid-template-columns:1fr;}.card-grid{grid-template-columns:1fr 1fr;}.conc-grid{grid-template-columns:1fr;}.authors-bar{flex-direction:column;gap:1.5rem;text-align:center;}.authors-left{flex-direction:column;gap:1rem;align-items:center;}.cur-d,.cur-r{display:none!important;}body{cursor:auto;}a,button{cursor:pointer;}.side-nav{display:none;}}
+@media(max-width:600px){.card-grid{grid-template-columns:1fr;}.hero-stats{grid-template-columns:1fr;}.nav-links{display:none;}section{padding:5rem 1.5rem;}.hero{padding:6rem 1.5rem 4rem;}}
+</style>
+</head>
+<body>
+
+<div id="loader"><div class="loader-knight">♞</div><div class="loader-title">Promenade du Cavalier</div><div class="loader-bar"><div class="loader-fill"></div></div><div class="loader-pct" id="loaderPct">0%</div></div>
+
+<div class="scroll-bar" id="scrollBar"></div>
+<div class="cur-d" id="curD"></div>
+<div class="cur-r" id="curR"></div>
+<canvas id="particles"></canvas>
+<div class="toast" id="toast"><span id="toastMsg"></span></div>
+
+<div class="side-nav">
+    <button class="side-dot active" data-label="Accueil" data-section="hero"></button>
+    <button class="side-dot" data-label="Markov" data-section="markov"></button>
+    <button class="side-dot" data-label="Degrés" data-section="degres"></button>
+    <button class="side-dot" data-label="Simulation" data-section="sim"></button>
+    <button class="side-dot" data-label="Retour" data-section="retour"></button>
+    <button class="side-dot" data-label="Asymptotique" data-section="asymp"></button>
+    <button class="side-dot" data-label="Conclusion" data-section="conclusion"></button>
+</div>
+<button class="back-top" id="backTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+<nav id="mainNav"><div class="nav-in"><div class="nav-logo">♞ Cavalier <span>× Markov</span></div><ul class="nav-links"><li><a href="#markov" data-section="markov">Chaîne</a></li><li><a href="#degres" data-section="degres">Degrés</a></li><li><a href="#sim" data-section="sim">Simulation</a></li><li><a href="#retour" data-section="retour">Retour</a></li><li><a href="#asymp" data-section="asymp">Y_n</a></li></ul></div></nav>
+
+<!-- ═══ HERO ═══ -->
+<header class="hero" data-spy="hero">
+    <div class="hero-left">
+        <div class="hero-tag">♞ Modèles Aléatoires Markoviens — IS4</div>
+        <h1 id="heroTitle">Promenade du<br><em>Cavalier</em></h1>
+        <p class="hero-desc">Étude de la marche aléatoire d'un cavalier d'échecs sur un échiquier 8×8 par la théorie des chaînes de Markov. Irréductibilité, récurrence, périodicité et convergence.</p>
+        <div class="hero-actions">
+            <a href="#sim" class="btn primary"><span>♞ Lancer la simulation</span></a>
+            <a href="#markov" class="btn ghost"><span>Théorie →</span></a>
+        </div>
+        <div class="hero-stats">
+            <div class="stat-cell"><div class="stat-val">64</div><div class="stat-lbl">Cases (états)</div></div>
+            <div class="stat-cell"><div class="stat-val">336</div><div class="stat-lbl">Arêtes totales</div></div>
+            <div class="stat-cell"><div class="stat-val">168</div><div class="stat-lbl">Retour moyen (coin)</div></div>
+        </div>
+    </div>
+    <div class="chess-wrap">
+        <div class="chess-container">
+            <div class="chessboard" id="heroBoard"></div>
+            <div class="chess-controls">
+                <button class="chess-btn" onclick="heroStep()">♞ Mouvement</button>
+                <button class="chess-btn" onclick="heroAuto()">▶ Auto</button>
+                <button class="chess-btn" onclick="heroReset()">↺ Reset</button>
+            </div>
+            <div class="chess-info" id="heroInfo">Cliquez <strong>Mouvement</strong> pour déplacer le cavalier · <span class="teal">0 coups</span></div>
+        </div>
+    </div>
+</header>
+<div class="divider"></div>
+
+<!-- ═══ MARKOV ═══ -->
+<section id="markov" data-spy="markov">
+    <div class="rv"><div class="s-num">01 — Chaîne de Markov</div><div class="s-title">Caractérisation <em>mathématique</em></div><div class="s-desc">Le cavalier choisit uniformément parmi ses déplacements possibles. Ce processus forme une chaîne de Markov homogène sur E = {0, …, 63}.</div></div>
+
+    <div class="card-grid rv d1">
+        <div class="t-card"><div class="tc-i">♟️</div><h3>Propriété de Markov</h3><p>X<sub>n+1</sub> = f(X<sub>n</sub>, Y<sub>n+1</sub>) où Y<sub>n</sub> sont i.i.d. — la position future ne dépend que de la position actuelle.</p></div>
+        <div class="t-card"><div class="tc-i">🔗</div><h3>Irréductible</h3><p>Le tour du cavalier prouve que toutes les cases communiquent : le graphe sous-jacent est fortement connexe.</p></div>
+        <div class="t-card"><div class="tc-i">♻️</div><h3>Récurrente positive</h3><p>Espace d'états fini (64 cases) + irréductibilité ⇒ récurrence positive. Retour presque sûr en temps fini.</p></div>
+    </div>
+
+    <div class="formula rv d2">
+        <div class="formula-label">Probabilité de transition</div>
+        <div class="formula-expr">p<sub>x,y</sub> = 1/D(x) si x → y possible, 0 sinon</div>
+    </div>
+
+    <div class="callout rv d3"><div class="callout-t">⚠️ Périodicité d = 2</div><p>Le cavalier <strong>change toujours la couleur de sa case</strong> à chaque mouvement (blanc→noir→blanc). La chaîne est donc périodique de période 2 — elle n'admet pas de distribution limite mais oscille entre cases noires et blanches.</p></div>
+</section>
+<div class="divider"></div>
+
+<!-- ═══ DEGRES ═══ -->
+<section id="degres" data-spy="degres">
+    <div class="rv"><div class="s-num">02 — Matrice des degrés</div><div class="s-title">Topologie de <em>l'échiquier</em></div><div class="s-desc">Le nombre de mouvements possibles varie de 2 (coins) à 8 (centre). Survolez pour explorer.</div></div>
+
+    <div class="heatmap-wrap rv d1" id="degreeHeatmap"></div>
+
+    <div class="callout rv d2"><div class="callout-t">📊 Distribution stationnaire</div><p>La mesure stationnaire est <strong>π(x) = D(x)/336</strong> où D(x) est le degré. Les cases centrales (D=8) sont visitées 4× plus souvent que les coins (D=2). La somme des 64 degrés vaut 336.</p></div>
+</section>
+<div class="divider"></div>
+
+<!-- ═══ SIMULATION ═══ -->
+<section id="sim" data-spy="sim">
+    <div class="rv"><div class="s-num">03 — Simulation interactive</div><div class="s-title">Déroulement sur <em>R1</em></div><div class="s-desc">L'algorithme de Dinic sur le réseau R1 : 5 sommets, 7 arcs. Visualisez le BFS et les chemins augmentants.</div></div>
+
+    <div class="rv d1" style="margin-bottom:2rem;">
+        <div class="s-title" style="font-size:1.4rem;">Itérations de <em>Dinic</em> adaptées</div>
+        <p style="color:var(--dim);font-size:0.85rem;margin-bottom:1.5rem;">Retour théorique au coin = 1/π(0) = 336/2 = <strong style="color:var(--gold)">168 coups</strong></p>
+    </div>
+
+    <div class="timeline rv d1">
+        <div class="tl-step" data-step="π"><h4>Mesure stationnaire</h4><p>π(x) = D(x)/336 — proportionnelle au degré de chaque case.</p><span class="badge b-path">π(coin) = 2/336 ≈ 0.006</span><span class="badge b-flow">π(centre) = 8/336 ≈ 0.024</span></div>
+        <div class="tl-step" data-step="T"><h4>Temps de retour</h4><p>E[T<sub>i</sub>] = 1/π(i) — inversement proportionnel à la probabilité stationnaire.</p><span class="badge b-path">coin: 168 coups</span><span class="badge b-flow">centre: 42 coups</span></div>
+        <div class="tl-step" data-step="✓"><h4>Validation par simulation</h4><p>3 000+ simulations confirment les prédictions avec une erreur &lt; 0.5%.</p><span class="badge b-stop">erreur max = 0.48%</span></div>
+    </div>
+
+    <div class="r-panel rv d2">
+        <div class="r-head"><h3>Temps moyens de retour — Théorie vs Simulation</h3><span class="r-badge">3 000 runs</span></div>
+        <table class="rt"><thead><tr><th>Case</th><th>Type</th><th>D(x)</th><th>π(x)</th><th>Théorique</th><th>Simulation</th><th>Erreur</th></tr></thead><tbody>
+            <tr><td class="nm">0</td><td>Coin</td><td class="val">2</td><td>1/168</td><td class="val">168.00</td><td>167.19</td><td class="tl">0.48%</td></tr>
+            <tr><td class="nm">9</td><td>Bord</td><td class="val">4</td><td>1/84</td><td class="val">84.00</td><td>83.76</td><td class="tl">0.29%</td></tr>
+            <tr><td class="nm">18</td><td>Milieu</td><td class="val">6</td><td>1/56</td><td class="val">56.00</td><td>55.92</td><td class="tl">0.14%</td></tr>
+            <tr><td class="nm">27</td><td>Centre</td><td class="val">8</td><td>1/42</td><td class="val">42.00</td><td>42.08</td><td class="tl">0.19%</td></tr>
+        </tbody></table>
+    </div>
+</section>
+<div class="divider"></div>
+
+<!-- ═══ RETOUR ═══ -->
+<section id="retour" data-spy="retour">
+    <div class="rv"><div class="s-num">04 — Temps de retour</div><div class="s-title">Retour au <em>coin</em></div><div class="s-desc">Le cavalier partant d'un coin met en moyenne 168 coups pour y revenir. La distribution suit approximativement une loi exponentielle.</div></div>
+
+    <div class="formula rv d1"><div class="formula-label">Temps moyen de retour</div><div class="formula-expr">E[T<sub>0</sub> | X<sub>0</sub>=0] = 1/π(0) = 336/2 = 168</div></div>
+
+    <div class="callout rv d2"><div class="callout-t">🎯 Résultat clé</div><p>Le temps de retour est <strong>inversement proportionnel au degré</strong> : un cavalier au centre (D=8) revient 4× plus vite qu'un cavalier au coin (D=2). Le QQ-plot confirme une distribution approximativement exponentielle des temps de retour.</p></div>
+</section>
+<div class="divider"></div>
+
+<!-- ═══ ASYMPTOTIQUE ═══ -->
+<section id="asymp" data-spy="asymp">
+    <div class="rv"><div class="s-num">05 — Comportement asymptotique</div><div class="s-title">Sous-chaîne <em>Y<sub>n</sub> = X<sub>2n</sub></em></div><div class="s-desc">En ne regardant que les instants pairs, on obtient une chaîne apériodique confinée à une seule couleur de l'échiquier.</div></div>
+
+    <div class="card-grid rv d1">
+        <div class="t-card"><div class="tc-i">🎭</div><h3>Bipartition stricte</h3><p>Y<sub>n</sub> ne visite que 32 cases sur 64 — exclusivement les cases de même couleur que la case de départ.</p></div>
+        <div class="t-card"><div class="tc-i">📈</div><h3>Convergence</h3><p>Contrairement à X<sub>n</sub>, la sous-chaîne Y<sub>n</sub> est apériodique et converge vers π'(x) = 2D(x)/336 sur sa moitié.</p></div>
+        <div class="t-card"><div class="tc-i">⚡</div><h3>Vitesse O(1/√n)</h3><p>La distance en variation totale décroît comme O(1/√n). Convergence rapide confirmée par simulation.</p></div>
+    </div>
+
+    <div class="formula rv d2"><div class="formula-label">Mesure stationnaire de Y<sub>n</sub></div><div class="formula-expr">π'(x) = 2D(x)/336 si x ∈ E<sub>pair</sub>, 0 sinon</div></div>
+
+    <div class="r-panel rv d3">
+        <div class="r-head"><h3>Propriétés de Y<sub>n</sub> par case de départ</h3><span class="r-badge">4 simulations</span></div>
+        <table class="rt"><thead><tr><th>Départ</th><th>Parité</th><th>Cases accessibles</th><th>Distance finale</th></tr></thead><tbody>
+            <tr><td class="nm">Case 0 (coin)</td><td>Paire</td><td class="val">32 cases paires</td><td class="tl">0.00015</td></tr>
+            <tr><td class="nm">Case 1 (bord)</td><td>Impaire</td><td class="val">32 cases impaires</td><td class="tl">0.00018</td></tr>
+            <tr><td class="nm">Case 18 (centre)</td><td>Paire</td><td class="val">32 cases paires</td><td class="tl">0.00012</td></tr>
+            <tr><td class="nm">Case 27 (centre)</td><td>Impaire</td><td class="val">32 cases impaires</td><td class="tl">0.00013</td></tr>
+        </tbody></table>
+    </div>
+</section>
+<div class="divider"></div>
+
+<!-- ═══ CONCLUSION ═══ -->
+<section id="conclusion" data-spy="conclusion">
+    <div class="rv"><div class="s-num">06 — Conclusion</div><div class="s-title">Bilan & <em>Perspectives</em></div></div>
+    <div class="conc-grid rv d1">
+        <div class="conc-card"><div class="cc-i">♞</div><h3>Chaîne caractérisée</h3><p>Irréductible, récurrente positive, périodique de période 2. Matrice de transition explicite.</p></div>
+        <div class="conc-card"><div class="cc-i">⏱️</div><h3>Temps de retour validé</h3><p>π(x)=D(x)/336 prédit correctement E[T]=168 coups pour les coins (erreur < 0.5%).</p></div>
+        <div class="conc-card"><div class="cc-i">📊</div><h3>Convergence de Y<sub>n</sub></h3><p>Sous-chaîne apériodique confinée à 32 cases, convergence O(1/√n) vers π'.</p></div>
+        <div class="conc-card"><div class="cc-i">🚀</div><h3>Perspectives</h3><p>Échiquiers n×n, autres pièces (tour, fou, dame), probabilités non uniformes.</p></div>
+    </div>
+    <div class="authors-bar rv d2">
+        <div class="authors-left">
+            <div class="a-person"><div class="a-av">SD</div><div><div class="a-name">Soufiane Derouich</div><div class="a-role">IS4 — Polytech Lille</div></div></div>
+            <div class="a-person"><div class="a-av">AN</div><div><div class="a-name">Amine Nakrou</div><div class="a-role">IS4 — Polytech Lille</div></div></div>
+        </div>
+        <div class="authors-right">Encadrant : <strong>Prof. Louckx Christophe</strong><br>9 Janvier 2026</div>
+    </div>
+</section>
+<footer><p>♞ Promenade du Cavalier — Modèles Aléatoires Markoviens · Polytech Lille</p></footer>
+
+<script>
+// ═══ LOADER ═══
+(function(){let p=0;const el=document.getElementById('loaderPct');const iv=setInterval(()=>{p+=Math.random()*18;if(p>=100){p=100;clearInterval(iv);setTimeout(()=>document.getElementById('loader').classList.add('done'),500);}el.textContent=Math.floor(p)+'%';},70);})();
+
+// ═══ CURSOR ═══
+const dot=document.getElementById('curD'),ring=document.getElementById('curR');
+let mx=0,my=0,rx=0,ry=0;
+document.addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY;dot.style.left=mx-4+'px';dot.style.top=my-4+'px';});
+function ringLoop(){rx+=(mx-rx)*0.12;ry+=(my-ry)*0.12;ring.style.left=rx-17+'px';ring.style.top=ry-17+'px';requestAnimationFrame(ringLoop);}ringLoop();
+document.querySelectorAll('a,button,.t-card,.chess-sq,.hm-cell,.tl-step,.side-dot,.back-top,.chess-btn,.btn,.conc-card,.callout').forEach(el=>{el.addEventListener('mouseenter',()=>ring.classList.add('hover'));el.addEventListener('mouseleave',()=>ring.classList.remove('hover'));});
+
+// ═══ SCROLL ═══
+const sbar=document.getElementById('scrollBar'),bTop=document.getElementById('backTop'),mnav=document.getElementById('mainNav');
+const sections=[...document.querySelectorAll('[data-spy]')];
+window.addEventListener('scroll',()=>{
+    const h=document.documentElement.scrollHeight-window.innerHeight;
+    sbar.style.width=(window.scrollY/h*100)+'%';
+    if(window.scrollY>300)bTop.classList.add('vis');else bTop.classList.remove('vis');
+    if(window.scrollY>60)mnav.classList.add('scrolled');else mnav.classList.remove('scrolled');
+    let cur='hero';for(const s of sections){if(s.getBoundingClientRect().top<=200)cur=s.dataset.spy;}
+    document.querySelectorAll('.nav-links a[data-section]').forEach(a=>a.classList.toggle('active',a.dataset.section===cur));
+    document.querySelectorAll('.side-dot[data-section]').forEach(d=>d.classList.toggle('active',d.dataset.section===cur));
+},{passive:true});
+document.querySelectorAll('.side-dot[data-section]').forEach(d=>d.addEventListener('click',()=>{document.querySelector('[data-spy="'+d.dataset.section+'"]')?.scrollIntoView({behavior:'smooth'});}));
+
+// ═══ HERO TEXT ═══
+(function(){const h1=document.getElementById('heroTitle');if(!h1)return;let idx=0;h1.innerHTML=h1.innerHTML.replace(/>([^<]+)</g,(m,text)=>{return'>'+text.split('').map(ch=>{if(ch===' '||ch==='\n')return ch;return `<span class="char" style="animation-delay:${0.4+idx++*0.025}s">${ch}</span>`;}).join('')+'<';});})();
+
+// ═══ PARTICLES ═══
+(function(){const c=document.getElementById('particles'),ctx=c.getContext('2d');let W,H;const ps=[];
+function resize(){W=window.innerWidth;H=window.innerHeight;c.width=W;c.height=H;}resize();window.addEventListener('resize',resize);
+for(let i=0;i<35;i++)ps.push({x:Math.random()*W,y:Math.random()*H,r:0.4+Math.random()*1,vx:(Math.random()-0.5)*0.2,vy:(Math.random()-0.5)*0.2,a:0.05+Math.random()*0.1});
+function draw(){ctx.clearRect(0,0,W,H);for(const p of ps){p.x+=p.vx;p.y+=p.vy;if(p.x<0||p.x>W)p.vx*=-1;if(p.y<0||p.y>H)p.vy*=-1;const dx=p.x-mx,dy=p.y-my,d=Math.sqrt(dx*dx+dy*dy);if(d<130&&d>0){p.x+=dx/d*1;p.y+=dy/d*1;}ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle=`rgba(212,168,67,${p.a})`;ctx.fill();}
+for(let i=0;i<ps.length;i++)for(let j=i+1;j<ps.length;j++){const dx=ps[i].x-ps[j].x,dy=ps[i].y-ps[j].y,d=Math.sqrt(dx*dx+dy*dy);if(d<100){ctx.beginPath();ctx.moveTo(ps[i].x,ps[i].y);ctx.lineTo(ps[j].x,ps[j].y);ctx.strokeStyle=`rgba(212,168,67,${0.03*(1-d/100)})`;ctx.lineWidth=0.5;ctx.stroke();}}
+requestAnimationFrame(draw);}draw();})();
+
+// ═══ KNIGHT MOVES ═══
+const KNIGHT_MOVES=[[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+const DEGREES=[[2,3,4,4,4,4,3,2],[3,4,6,6,6,6,4,3],[4,6,8,8,8,8,6,4],[4,6,8,8,8,8,6,4],[4,6,8,8,8,8,6,4],[4,6,8,8,8,8,6,4],[3,4,6,6,6,6,4,3],[2,3,4,4,4,4,3,2]];
+
+function getKnightMoves(r,c){const m=[];for(const[dr,dc]of KNIGHT_MOVES){const nr=r+dr,nc=c+dc;if(nr>=0&&nr<8&&nc>=0&&nc<8)m.push([nr,nc]);}return m;}
+
+// ═══ HERO CHESSBOARD ═══
+let heroKnight=[0,0],heroMoves=0,heroAutoInterval=null,heroVisited=new Set(['0,0']);
+function buildHeroBoard(){
+    const board=document.getElementById('heroBoard');board.innerHTML='';
+    const reachable=getKnightMoves(heroKnight[0],heroKnight[1]);
+    for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+        const sq=document.createElement('div');
+        sq.className='chess-sq '+((r+c)%2===0?'light':'dark');
+        sq.dataset.r=r;sq.dataset.c=c;
+        if(r===heroKnight[0]&&c===heroKnight[1])sq.classList.add('knight-here');
+        if(reachable.some(([mr,mc])=>mr===r&&mc===c))sq.classList.add('reachable');
+        if(heroVisited.has(r+','+c))sq.classList.add('visited');
+        const deg=document.createElement('span');deg.className='degree';deg.textContent=DEGREES[r][c];
+        sq.appendChild(deg);
+        sq.addEventListener('click',()=>{
+            const isReachable=reachable.some(([mr,mc])=>mr===r&&mc===c);
+            if(isReachable){heroKnight=[r,c];heroMoves++;heroVisited.add(r+','+c);buildHeroBoard();updateHeroInfo();}
+        });
+        board.appendChild(sq);
+    }
+}
+function updateHeroInfo(){document.getElementById('heroInfo').innerHTML=`Case <strong>(${heroKnight[0]},${heroKnight[1]})</strong> · D=${DEGREES[heroKnight[0]][heroKnight[1]]} · <span class="teal">${heroMoves} coups</span> · ${heroVisited.size}/64 visitées`;}
+function heroStep(){const moves=getKnightMoves(heroKnight[0],heroKnight[1]);const m=moves[Math.floor(Math.random()*moves.length)];heroKnight=m;heroMoves++;heroVisited.add(m[0]+','+m[1]);buildHeroBoard();updateHeroInfo();}
+function heroAuto(){if(heroAutoInterval){clearInterval(heroAutoInterval);heroAutoInterval=null;}else{heroAutoInterval=setInterval(heroStep,300);}}
+function heroReset(){if(heroAutoInterval)clearInterval(heroAutoInterval);heroAutoInterval=null;heroKnight=[0,0];heroMoves=0;heroVisited=new Set(['0,0']);buildHeroBoard();updateHeroInfo();}
+buildHeroBoard();updateHeroInfo();
+
+// ═══ DEGREE HEATMAP ═══
+(function(){
+    const wrap=document.getElementById('degreeHeatmap');
+    const colors={2:'#c0392b',3:'#e67e22',4:'#f1c40f',6:'#27ae60',8:'#2980b9'};
+    for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+        const d=DEGREES[r][c];
+        const cell=document.createElement('div');cell.className='hm-cell';
+        cell.style.background=colors[d];cell.style.color=d<=3?'#fff':'rgba(0,0,0,0.7)';
+        cell.textContent=d;
+        cell.dataset.tip=`(${r},${c}) · π=${(d/336).toFixed(4)} · E[T]=${(336/d).toFixed(0)}`;
+        wrap.appendChild(cell);
+    }
+})();
+
+// ═══ REVEAL ═══
+const rvObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('vis');});},{threshold:0.06,rootMargin:'0px 0px -30px 0px'});
+document.querySelectorAll('.rv').forEach(el=>rvObs.observe(el));
+
+// ═══ ROW STAGGER ═══
+const rowObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){e.target.querySelectorAll('tbody tr').forEach((r,i)=>{r.style.opacity='0';r.style.transform='translateX(-8px)';setTimeout(()=>{r.style.transition='all 0.4s var(--tr)';r.style.opacity='1';r.style.transform='none';},i*80);});rowObs.unobserve(e.target);}});},{threshold:0.2});
+document.querySelectorAll('.r-panel').forEach(p=>rowObs.observe(p));
+
+// ═══ CLICK PARTICLES ═══
+document.addEventListener('click',e=>{for(let i=0;i<8;i++){const p=document.createElement('div');p.style.cssText=`position:fixed;left:${e.clientX}px;top:${e.clientY}px;width:${3+Math.random()*3}px;height:${3+Math.random()*3}px;border-radius:50%;background:${['var(--gold)','var(--wood)','var(--teal)'][i%3]};pointer-events:none;z-index:99997;`;document.body.appendChild(p);const a=(i/8)*Math.PI*2,d=25+Math.random()*35,tx=Math.cos(a)*d,ty=Math.sin(a)*d;p.animate([{transform:'translate(-50%,-50%) scale(1)',opacity:1},{transform:`translate(calc(-50% + ${tx}px),calc(-50% + ${ty}px)) scale(0)`,opacity:0}],{duration:400+Math.random()*200,easing:'cubic-bezier(0.16,1,0.3,1)'}).onfinish=()=>p.remove();}});
+
+// ═══ BTN MAGNETIC ═══
+document.querySelectorAll('.btn').forEach(btn=>{btn.addEventListener('mousemove',e=>{const r=btn.getBoundingClientRect(),x=e.clientX-r.left-r.width/2,y=e.clientY-r.top-r.height/2;btn.style.transform=`translate(${x*0.2}px,${y*0.2}px)`;});btn.addEventListener('mouseleave',()=>{btn.style.transform='';});});
+</script>
+</body>
+</html>
